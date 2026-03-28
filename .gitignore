@@ -24,7 +24,6 @@ Thumbs.db
 *.npy
 *.pkl
 !artifacts/codebook/*.pkl
-*.npz
 
 # Temporary
 *.tmp
