@@ -201,9 +201,9 @@ def extract_codebook(image_dir, output_path, max_images=250, size=512):
     # Save codebook
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
     
-    # Save as pickle (includes numpy arrays)
+    # Save as pickle (includes numpy arrays, protocol=4 for compatibility)
     with open(output_path, 'wb') as f:
-        pickle.dump(codebook, f)
+        pickle.dump(codebook, f, protocol=4)
     
     # Save metadata as JSON
     json_path = output_path.replace('.pkl', '_meta.json')
