@@ -8,6 +8,8 @@
   <b>Discovering, detecting, and surgically removing Google's AI watermark through spectral analysis</b>
 </p>
 
+Visit us on [PitchHut](https://www.pitchhut.com/project/reverse-synthid-engineering)
+
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python" alt="Python">
   <img src="https://img.shields.io/badge/License-Research-green?style=flat-square" alt="License">
