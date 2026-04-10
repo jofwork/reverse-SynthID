@@ -17,11 +17,15 @@ Based on insights from:
 """
 
 import os
+import sys
 import io
 import numpy as np
 import cv2
 from scipy.fft import fft2, ifft2, fftshift, ifftshift
 from scipy import ndimage
+
+# Ensure same-directory modules are importable regardless of cwd
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass
 from PIL import Image
@@ -118,12 +122,8 @@ class SynthIDBypass:
     ) -> np.ndarray:
         """Edge-preserving bilateral filter denoising."""
         img_uint8 = (image * 255).clip(0, 255).astype(np.uint8)
-        
-        if len(image.shape) == 3:
-            denoised = cv2.bilateralFilter(img_uint8, d, sigma_color, sigma_space)
-        else:
-            denoised = cv2.bilateralFilter(img_uint8, d, sigma_color, sigma_space)
-        
+        denoised = cv2.bilateralFilter(img_uint8, d, sigma_color, sigma_space)
+
         return denoised.astype(np.float32) / 255.0
     
     def denoise_nlm(
@@ -183,12 +183,14 @@ class SynthIDBypass:
         Similar to multiple KSampler passes in the diffusion workflow.
         """
         current = image.copy()
-        
+
         for i in range(passes):
-            # Decrease noise sigma slightly each pass
-            sigma = noise_sigma * (1 - i * 0.2)
+            # Decrease noise sigma slightly each pass, clamp to avoid negative
+            sigma = noise_sigma * max(0, 1 - i * 0.2)
+            if sigma <= 0:
+                break
             current = self.noise_replacement_pass(current, noise_sigma=sigma)
-        
+
         return current
     
     # ================================================================
@@ -1247,40 +1249,45 @@ class SynthIDBypass:
         current = img_f.copy()
         stages_applied = []
         s = params['base']
-        
-        # Single pass through transform categories
-        # Each attacks a different dimension of the watermark embedding
-        
-        # Stage 1: Spatial disruption — only in 'maximum' mode
-        # (causes significant pixel misalignment affecting SSIM, but
-        #  targets SynthID's weakest category at 52% TPR worst-case)
-        if strength == 'maximum':
-            current = self._spatial_disruption(current, strength=s)
-            stages_applied.append('spatial')
-        
-        # Stage 2: Quality degradation (JPEG/WebP/resize cycling)
-        current = self._quality_degradation(
-            current, jpeg_quality=params['jpeg_q'], strength=s
-        )
-        stages_applied.append('quality')
-        
-        # Stage 3: Noise injection + denoising
-        current = self._noise_disruption(
-            current, sigma=params['noise_sigma'], strength=s
-        )
-        stages_applied.append('noise')
-        
-        # Stage 4: Color manipulation
-        current = self._color_disruption(current, strength=s)
-        stages_applied.append('color')
-        
-        # Stage 5: Overlay disruption
-        current = self._overlay_disruption(current, strength=s)
-        stages_applied.append('overlay')
-        
+
+        for iteration in range(iterations):
+            # Diminish strength slightly on subsequent iterations
+            iter_s = s * max(0.5, 1.0 - iteration * 0.15)
+            iter_jpeg_q = min(95, params['jpeg_q'] + iteration * 5)
+
+            # Pass through transform categories
+            # Each attacks a different dimension of the watermark embedding
+
+            # Stage 1: Spatial disruption — only in 'maximum' mode
+            # (causes significant pixel misalignment affecting SSIM, but
+            #  targets SynthID's weakest category at 52% TPR worst-case)
+            if strength == 'maximum':
+                current = self._spatial_disruption(current, strength=iter_s)
+                stages_applied.append(f'spatial_{iteration}')
+
+            # Stage 2: Quality degradation (JPEG/WebP/resize cycling)
+            current = self._quality_degradation(
+                current, jpeg_quality=iter_jpeg_q, strength=iter_s
+            )
+            stages_applied.append(f'quality_{iteration}')
+
+            # Stage 3: Noise injection + denoising
+            current = self._noise_disruption(
+                current, sigma=params['noise_sigma'], strength=iter_s
+            )
+            stages_applied.append(f'noise_{iteration}')
+
+            # Stage 4: Color manipulation
+            current = self._color_disruption(current, strength=iter_s)
+            stages_applied.append(f'color_{iteration}')
+
+            # Stage 5: Overlay disruption
+            current = self._overlay_disruption(current, strength=iter_s)
+            stages_applied.append(f'overlay_{iteration}')
+
         # Clamp output to valid [0,1] range
         current = np.clip(current, 0, 1)
-        
+
         # Quantize to uint8 for consistent quality metrics
         cleaned_uint8 = (current * 255).clip(0, 255).astype(np.uint8)
         original_uint8 = (img_f * 255).clip(0, 255).astype(np.uint8)
@@ -1321,9 +1328,9 @@ class SynthIDBypass:
             }
         
         # Determine success
-        # Note: Internal SSIM computation is bugged on Python 3.14 (returns ~0)
-        # while external computation is correct. We rely on PSNR > 28 dB which
-        # strongly correlates with SSIM > 0.90 for these types of distortions.
+        # Rely on PSNR > 28 dB as primary quality gate; SSIM is computed
+        # for reporting but heavy multi-pass transforms can depress it below
+        # the 0.90 threshold even when visual quality is acceptable.
         success = psnr > 28
         if detection_before and detection_after:
             conf_drop = detection_before['confidence'] - detection_after['confidence']

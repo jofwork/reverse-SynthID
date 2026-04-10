@@ -23,6 +23,9 @@ from scipy.ndimage import zoom
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Tuple
 
+# Ensure same-directory modules are importable regardless of cwd
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 
 @dataclass
 class RemovalResult:
