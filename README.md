@@ -43,10 +43,10 @@ If you can generate these:
 ### How to Contribute
 
 1. Generate a batch of black/white images by attaching a pure black/white image into Gemini and prompting it to "recreate this as it is"
-2. Place them in new folders:
+2. Upload them to our **Hugging Face dataset**: [aoxo/reverse-synthid](https://huggingface.co/datasets/aoxo/reverse-synthid)
    - `gemini_black_nb_pro/` (for black)
    - `gemini_white_nb_pro/` (for white)
-3. Open a Pull Request 🚀
+3. Open a Pull Request on the HF dataset repo
 
 These reference images are **critical** for:
 - Carrier frequency discovery
@@ -54,6 +54,18 @@ These reference images are **critical** for:
 - Improving cross-resolution robustness
 
 > Even 150–200 images at a new resolution can significantly improve detection and removal.
+
+### Download Reference Images
+
+Reference images are hosted on Hugging Face to keep the git repo lightweight:
+
+```bash
+pip install huggingface_hub
+python scripts/download_images.py           # download all
+python scripts/download_images.py gemini_black  # download specific folder
+```
+
+Dataset: [huggingface.co/datasets/aoxo/reverse-synthid](https://huggingface.co/datasets/aoxo/reverse-synthid)
 
 ---
 
@@ -258,9 +270,8 @@ reverse-SynthID/
 │       ├── deep_synthid_analysis.py       # FFT / phase analysis scripts
 │       └── synthid_codebook_finder.py     # Carrier frequency discovery
 │
-├── gemini_black/                          # 100 pure-black Gemini images (1024x1024)
-├── gemini_white/                          # 100 pure-white Gemini images (1024x1024)
-├── gemini_random/                         # 88 watermarked content images (1536x2816)
+├── scripts/
+│   └── download_images.py                 # Download reference images from HF
 │
 ├── artifacts/
 │   ├── spectral_codebook_v3.npz           # Multi-res V3 codebook [1024x1024, 1536x2816]

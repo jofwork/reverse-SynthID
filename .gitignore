@@ -25,6 +25,13 @@ Thumbs.db
 *.pkl
 !artifacts/codebook/*.pkl
 
+# Reference images (hosted on HF: https://huggingface.co/datasets/aoxo/reverse-synthid)
+gemini_black/
+gemini_white/
+gemini_random/
+gemini_black_nb_pro/
+gemini_white_nb_pro/
+
 # Secrets
 .env
 
