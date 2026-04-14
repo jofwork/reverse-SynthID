@@ -171,9 +171,9 @@ for i, f in enumerate(uploaded):
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.image(pil_img, caption=f"Original — {f.name}", use_container_width=True)
+                    st.image(pil_img, caption=f"Original — {f.name}", width=None)
                 with col2:
-                    st.image(out_pil, caption="Processed", use_container_width=True)
+                    st.image(out_pil, caption="Processed", width=None)
 
                 st.markdown(f"""
 <div class="result-box">
@@ -204,7 +204,7 @@ Exact codebook match: <b>{'✅' if result.details.get('exact_match') else '⚠�
 
                 col1, col2 = st.columns([1, 2])
                 with col1:
-                    st.image(pil_img, caption=f.name, use_container_width=True)
+                    st.image(pil_img, caption=f.name, width=None)
                 with col2:
                     st.markdown(f"""
 <div class="result-box">
