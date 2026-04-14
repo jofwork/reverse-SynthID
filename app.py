@@ -165,7 +165,11 @@ for i, f in enumerate(uploaded):
             # ── Bypass ──────────────────────────────────────────────────────
             try:
                 result = bypass.bypass_v3(rgb, codebook, strength=strength)
-                out_pil = array_to_pil(result.image)
+                # Handle different attribute names across versions
+                out_arr = getattr(result, 'image', None) or getattr(result, 'output', None) or getattr(result, 'bypassed', None) or getattr(result, 'result', None)
+                if out_arr is None:
+                    raise AttributeError(f"Cannot find image in result. Available: {[a for a in dir(result) if not a.startswith('_')]}")
+                out_pil = array_to_pil(out_arr)
                 out_bytes = img_to_bytes(out_pil, fmt=output_format)
                 ext = output_format.lower()
 
