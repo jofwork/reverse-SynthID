@@ -1,7 +1,6 @@
 """
 reverse-SynthID Web Interface
-Drop this file into the root of the reverse-SynthID repo, then run:
-    streamlit run app.py
+Compatible with Streamlit 1.56+
 """
 
 import io
@@ -13,10 +12,8 @@ import numpy as np
 import streamlit as st
 from PIL import Image
 
-# ── Make sure src/ is on the path ──────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent / "src" / "extraction"))
 
-# ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="SynthID Tool",
     page_icon="🔍",
@@ -24,7 +21,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Minimal CSS ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
     .block-container { padding-top: 2rem; }
@@ -40,7 +36,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading codebook…")
 def load_bypass(codebook_path: str):
     from synthid_bypass import SynthIDBypass, SpectralCodebook
@@ -73,7 +68,7 @@ def img_to_bytes(img: Image.Image, fmt="PNG") -> bytes:
     return buf.getvalue()
 
 
-def make_zip(results: list[tuple[str, bytes]]) -> bytes:
+def make_zip(results: list) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, data in results:
@@ -81,7 +76,17 @@ def make_zip(results: list[tuple[str, bytes]]) -> bytes:
     return buf.getvalue()
 
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
+def get_result_image(result):
+    for attr in ['cleaned_image', 'image', 'output', 'bypassed', 'result']:
+        val = getattr(result, attr, None)
+        if val is not None:
+            return val
+    raise AttributeError(
+        f"Cannot find image in result. Available: {[a for a in dir(result) if not a.startswith('_')]}"
+    )
+
+
+# Sidebar
 with st.sidebar:
     st.title("⚙️ Settings")
     st.markdown("---")
@@ -94,12 +99,10 @@ with st.sidebar:
     bypass_cb_path = st.text_input(
         "Bypass codebook (.npz)",
         value="artifacts/spectral_codebook_v3.npz",
-        help="Path relative to the repo root",
     )
     detect_cb_path = st.text_input(
         "Detection codebook (.pkl)",
         value="artifacts/codebook/robust_codebook.pkl",
-        help="Path relative to the repo root",
     )
 
     if mode == "🛡️ Remove Watermark":
@@ -109,7 +112,6 @@ with st.sidebar:
             "Strength",
             options=["gentle", "moderate", "aggressive", "maximum"],
             value="aggressive",
-            help="Higher = more watermark removed, but slightly more processing",
         )
         output_format = st.selectbox("Output format", ["PNG", "JPEG"], index=0)
 
@@ -117,7 +119,7 @@ with st.sidebar:
     st.caption("reverse-SynthID · research use only")
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# Main
 st.title("🔍 SynthID Watermark Tool")
 st.caption("Upload Gemini-generated images to detect or remove SynthID watermarks.")
 
@@ -139,7 +141,7 @@ run_btn = st.button(
 if not run_btn:
     st.stop()
 
-# ── Load model(s) ────────────────────────────────────────────────────────────
+# Load model
 try:
     if "Remove" in mode:
         bypass, codebook = load_bypass(bypass_cb_path)
@@ -149,38 +151,42 @@ except Exception as e:
     st.error(f"**Could not load codebook:** {e}\n\nCheck the path in the sidebar.")
     st.stop()
 
-# ── Process ──────────────────────────────────────────────────────────────────
-results_for_zip: list[tuple[str, bytes]] = []
+# Process
+results_for_zip = []
 progress = st.progress(0, text="Processing…")
 
 for i, f in enumerate(uploaded):
     progress.progress((i + 1) / len(uploaded), text=f"Processing {f.name}…")
     pil_img = Image.open(f)
     rgb = pil_to_rgb_array(pil_img)
-
     stem = Path(f.name).stem
 
     with st.container():
         if "Remove" in mode:
-            # ── Bypass ──────────────────────────────────────────────────────
             try:
                 result = bypass.bypass_v3(rgb, codebook, strength=strength)
-                out_pil = array_to_pil(result.cleaned_image)
+                out_arr = get_result_image(result)
+                out_pil = array_to_pil(out_arr)
                 out_bytes = img_to_bytes(out_pil, fmt=output_format)
                 ext = output_format.lower()
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.image(pil_img, caption=f"Original — {f.name}", width=None)
+                    st.image(pil_img, caption=f"Original — {f.name}")
                 with col2:
-                    st.image(out_pil, caption="Processed", width=None)
+                    st.image(out_pil, caption="Processed")
+
+                psnr = getattr(result, 'psnr', None)
+                details = getattr(result, 'details', {}) or {}
+                profile_res = details.get('profile_resolution', 'N/A')
+                exact = details.get('exact_match', False)
 
                 st.markdown(f"""
 <div class="result-box">
 <b>{f.name}</b><br>
-PSNR: <b>{result.psnr:.1f} dB</b> &nbsp;|&nbsp;
-Resolution: <b>{result.details.get('profile_resolution', 'N/A')}</b> &nbsp;|&nbsp;
-Exact codebook match: <b>{'✅' if result.details.get('exact_match') else '⚠️ fallback'}</b>
+{'PSNR: <b>' + f'{psnr:.1f} dB</b> &nbsp;|&nbsp;' if psnr else ''}
+Resolution: <b>{profile_res}</b> &nbsp;|&nbsp;
+Exact codebook match: <b>{'✅' if exact else '⚠️ fallback'}</b>
 </div>
 """, unsafe_allow_html=True)
 
@@ -197,14 +203,13 @@ Exact codebook match: <b>{'✅' if result.details.get('exact_match') else '⚠�
                 st.error(f"**{f.name}** — processing failed: {e}")
 
         else:
-            # ── Detection ───────────────────────────────────────────────────
             try:
                 det = detector.detect_array(rgb)
                 verdict = "🟢 Watermarked" if det.is_watermarked else "⚪ Not detected"
 
                 col1, col2 = st.columns([1, 2])
                 with col1:
-                    st.image(pil_img, caption=f.name, width=None)
+                    st.image(pil_img, caption=f.name)
                 with col2:
                     st.markdown(f"""
 <div class="result-box">
@@ -221,7 +226,6 @@ Confidence: <b>{det.confidence:.1%}</b>
 
 progress.empty()
 
-# ── Bulk download ─────────────────────────────────────────────────────────────
 if "Remove" in mode and len(results_for_zip) > 1:
     st.download_button(
         label=f"⬇ Download all {len(results_for_zip)} images as ZIP",
